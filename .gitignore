@@ -33,6 +33,9 @@ Thumbs.db
 dist/
 build/
 
-setup-hosts.ps1
+# Docker compose (local configuration - don't commit)
+docker-compose.yml
+
+# Setup scripts (local helper scripts - don't commit)
 setup-hosts.sh
-docker-compose.yml 
+setup-hosts.ps1 

