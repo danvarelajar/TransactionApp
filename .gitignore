@@ -32,3 +32,7 @@ Thumbs.db
 # Build outputs
 dist/
 build/
+
+setup-hosts.ps1
+setup-hosts.sh
+docker-compose.yml 
