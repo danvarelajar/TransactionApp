@@ -1,0 +1,22 @@
+services:
+  app:
+    build: ./app
+    hostname: ${PAYMENT_DOMAIN:-payment.fortinet.demo}
+    ports:
+      - "${PAYMENT_PORT:-80}:${PAYMENT_INTERNAL_PORT:-3000}"
+    environment:
+      - PORT=${PAYMENT_INTERNAL_PORT:-3000}
+      - ATTACKER_URL=http://${ATTACKER_DOMAIN:-attacker.fortinet.demo}:${ATTACKER_PORT:-8080}
+    restart: "no"
+
+  attacker:
+    build: ./attacker
+    hostname: ${ATTACKER_DOMAIN:-attacker.fortinet.demo}
+    ports:
+      - "${ATTACKER_PORT:-8080}:${ATTACKER_INTERNAL_PORT:-3001}"
+    environment:
+      - PORT=${ATTACKER_INTERNAL_PORT:-3001}
+      - ATTACKER_DOMAIN=${ATTACKER_DOMAIN:-attacker.fortinet.demo}
+      - ATTACKER_PORT=${ATTACKER_PORT:-8080}
+      - ALLOWED_ORIGIN=http://${PAYMENT_DOMAIN:-payment.fortinet.demo}
+    restart: "no"

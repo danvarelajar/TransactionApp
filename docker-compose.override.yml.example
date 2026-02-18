@@ -1,0 +1,24 @@
+# Example override file - copy to docker-compose.override.yml to customize
+# docker-compose automatically loads docker-compose.override.yml if it exists
+# This allows you to customize domains without modifying docker-compose.yml
+
+services:
+  app:
+    hostname: payment.example.com
+    ports:
+      - "8080:3000"  # Use port 8080 instead of 80
+    environment:
+      - ATTACKER_URL=http://attacker.example.com:8081
+    extra_hosts:
+      - "payment.example.com:127.0.0.1"
+      - "attacker.example.com:127.0.0.1"
+
+  attacker:
+    hostname: attacker.example.com
+    ports:
+      - "8081:3001"  # Use port 8081 instead of 8080
+    environment:
+      - ALLOWED_ORIGIN=http://payment.example.com
+    extra_hosts:
+      - "payment.example.com:127.0.0.1"
+      - "attacker.example.com:127.0.0.1"
