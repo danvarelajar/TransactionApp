@@ -1,14 +1,37 @@
-# Optional: copy to docker-compose.override.yml — Compose merges this with docker-compose.yml
-# automatically. Keep only differences here (typically host port remaps); the full stack
-# lives in docker-compose.yml alone.
+# TransactionApp — full stack in one file (build + hostname + env + extra_hosts).
+# Edit hostnames/CORS origins below for your domain (e.g. *.packetsoprano.com).
 #
-# WAF/off-box TLS: apps still honor X-Forwarded-Proto when the edge forwards it.
+# Behind a WAF: forward X-Forwarded-Proto: https (and X-Forwarded-Host when needed).
+#
+# Thin per-machine tweaks: copy docker-compose.override.yml.example → docker-compose.override.yml
+#
+# YAML pitfall: do not comment out only `environment:` — the `- VAR=...` lines must stay under
+# that key or they attach to `ports:` and Compose errors with "invalid proto".
 
 services:
   app:
+    build: ./app
+    hostname: payment.example.com
     ports:
-      - "8080:3000"
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - ATTACKER_URL=https://attacker.example.com
+      # Omit ATTACKER_URL and set next line if payment + steal.js share one public hostname:
+      # - USE_SAME_ORIGIN_ATTACKER=1
+    extra_hosts:
+      - "payment.example.com:127.0.0.1"
+      - "attacker.example.com:127.0.0.1"
 
   attacker:
+    build: ./attacker
+    hostname: attacker.example.com
     ports:
-      - "8081:3001"
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - ALLOWED_ORIGINS=https://payment.example.com,https://attacker.example.com
+      - TRUSTED_PAYMENT_ORIGIN_SUFFIX=example.com
+    extra_hosts:
+      - "payment.example.com:127.0.0.1"
+      - "attacker.example.com:127.0.0.1"
