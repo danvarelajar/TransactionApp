@@ -4,16 +4,21 @@
 #
 # Behind a Forti/other WAF (HTTPS to clients, plain HTTP to this stack), ensure the WAF forwards
 # X-Forwarded-Proto: https (and optionally X-Forwarded-Host). Both apps honor those headers by default.
+#
+# YAML pitfall: `environment:` must stay UNCOMMENTED if you use `- VAR=...` lines. If you comment
+# out only `environment:` but leave the `- VAR=...` dashes, those lines attach to the previous
+# key (usually `ports:`). Compose then tries to parse them as port mappings → "invalid proto".
 
 services:
   app:
     hostname: payment.example.com
     ports:
       - "8080:3000"  # Use port 8080 instead of 80
-    # Optional env (uncomment for your topology):
-    # environment:
-    #   - ATTACKER_URL=https://attacker.example.com
-    #   - USE_SAME_ORIGIN_ATTACKER=1
+    environment:
+      # Use ATTACKER_URL for a fixed origin, or USE_SAME_ORIGIN_ATTACKER=1 with no ATTACKER_URL
+      # when payment and steal.js share one public hostname (path-based routing on the WAF).
+      - ATTACKER_URL=https://attacker.example.com
+      # - USE_SAME_ORIGIN_ATTACKER=1
     extra_hosts:
       - "payment.example.com:127.0.0.1"
       - "attacker.example.com:127.0.0.1"
