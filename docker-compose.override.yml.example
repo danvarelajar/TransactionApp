@@ -1,37 +1,26 @@
-# TransactionApp — full stack in one file (build + hostname + env + extra_hosts).
-# Edit hostnames/CORS origins below for your domain (e.g. *.packetsoprano.com).
-#
-# Behind a WAF: forward X-Forwarded-Proto: https (and X-Forwarded-Host when needed).
-#
-# Thin per-machine tweaks: copy docker-compose.override.yml.example → docker-compose.override.yml
-#
-# YAML pitfall: do not comment out only `environment:` — the `- VAR=...` lines must stay under
-# that key or they attach to `ports:` and Compose errors with "invalid proto".
+# Copy to docker-compose.override.yml for local-only changes (merged with docker-compose.yml).
 
 services:
   app:
+    env_file: .env
     build: ./app
-    hostname: payment.example.com
+    hostname: ${PAYMENT_DOMAIN:-payment.example.com}
     ports:
-      - "3000:3000"
+      - "${PAYMENT_PORT:-3000}:${PAYMENT_INTERNAL_PORT:-3000}"
     environment:
-      - PORT=3000
-      - ATTACKER_URL=https://attacker.example.com
-      # Omit ATTACKER_URL and set next line if payment + steal.js share one public hostname:
-      # - USE_SAME_ORIGIN_ATTACKER=1
+      - PORT=${PAYMENT_INTERNAL_PORT:-3000}
     extra_hosts:
-      - "payment.example.com:127.0.0.1"
-      - "attacker.example.com:127.0.0.1"
+      - "${PAYMENT_DOMAIN:-payment.example.com}:127.0.0.1"
+      - "${ATTACKER_DOMAIN:-attacker.example.com}:127.0.0.1"
 
   attacker:
+    env_file: .env
     build: ./attacker
-    hostname: attacker.example.com
+    hostname: ${ATTACKER_DOMAIN:-attacker.example.com}
     ports:
-      - "3001:3001"
+      - "${ATTACKER_PORT:-3001}:${ATTACKER_INTERNAL_PORT:-3001}"
     environment:
-      - PORT=3001
-      - ALLOWED_ORIGINS=https://payment.example.com,https://attacker.example.com
-      - TRUSTED_PAYMENT_ORIGIN_SUFFIX=example.com
+      - PORT=${ATTACKER_INTERNAL_PORT:-3001}
     extra_hosts:
-      - "payment.example.com:127.0.0.1"
-      - "attacker.example.com:127.0.0.1"
+      - "${PAYMENT_DOMAIN:-payment.example.com}:127.0.0.1"
+      - "${ATTACKER_DOMAIN:-attacker.example.com}:127.0.0.1"
