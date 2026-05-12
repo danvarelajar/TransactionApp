@@ -3,7 +3,62 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ATTACKER_URL = process.env.ATTACKER_URL || 'http://attacker.fortinet.demo';
+
+if (process.env.TRUST_PROXY !== '0') {
+  app.set('trust proxy', 1);
+}
+
+/**
+ * Respect WAF TLS termination (client uses https; Node sees http).
+ */
+function forwardedProto(req) {
+  const raw = req.get('x-forwarded-proto');
+  if (raw) return raw.split(',')[0].trim().toLowerCase();
+  return req.secure ? 'https' : (req.protocol || 'http').split(',')[0].trim().toLowerCase();
+}
+
+function forwardedHost(req) {
+  const raw = req.get('x-forwarded-host') || req.get('host');
+  if (!raw) return '';
+  return raw.split(',')[0].trim();
+}
+
+/**
+ * ATTACKER_URL: optional full origin (legacy fixed deployment).
+ * Else ATTACKER_DOMAIN: bare hostname; else derive from checkout Host:
+ *   USE_SAME_ORIGIN_ATTACKER=1 -> same hostname as payment page
+ *   payment.foo -> attacker.foo (dual hostname)
+ *   otherwise -> same hostname (payment and attacker path-routed on one host).
+ */
+function resolveAttackerOrigin(req) {
+  const legacy = (process.env.ATTACKER_URL || '').trim();
+  if (legacy) return legacy.replace(/\/$/, '');
+
+  const proto = forwardedProto(req);
+  const payHost = forwardedHost(req);
+  const explicitAttack = (process.env.ATTACKER_DOMAIN || '').trim();
+
+  let host;
+  if (explicitAttack) host = explicitAttack;
+  else if ((process.env.USE_SAME_ORIGIN_ATTACKER || '') === '1') host = payHost;
+  else if (payHost.startsWith('payment.')) host = `attacker.${payHost.slice('payment.'.length)}`;
+  else host = payHost;
+
+  if (!host) {
+    return 'http://attacker.fortinet.demo';
+  }
+
+  let origin = `${proto}://${host}`;
+  const pubPort = (
+    process.env.ATTACKER_PUBLIC_PORT ||
+    process.env.EXTERNAL_ATTACKER_PORT ||
+    ''
+  ).trim();
+  if (pubPort && pubPort !== '80' && pubPort !== '443') {
+    origin += `:${pubPort}`;
+  }
+  return origin;
+}
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
@@ -11,7 +66,7 @@ app.use(express.urlencoded({ extended: true }));
 // Main route - script is always injected (simulating compromised third-party script)
 app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html');
-  res.send(getHtml(ATTACKER_URL, true));
+  res.send(getHtml(resolveAttackerOrigin(req), true));
 });
 
 // Reflected XSS: 'q' or 'search' param is echoed without encoding (triggers script load)
@@ -34,7 +89,7 @@ app.get('/search', (req, res) => {
 // Checkout route - same as main route (script always injected)
 app.get('/checkout', (req, res) => {
   res.setHeader('Content-Type', 'text/html');
-  res.send(getHtml(ATTACKER_URL, true));
+  res.send(getHtml(resolveAttackerOrigin(req), true));
 });
 
 function getHtml(attackerUrl, injectScript = true) {
