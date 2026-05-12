@@ -1,0 +1,29 @@
+# Copy to compose.override.yaml in the same directory as compose.yaml.
+#
+# Compose automatically merges compose.yaml + compose.override.yaml when you run
+# `docker compose build` or `docker compose up`.
+#
+# Important: a standalone docker-compose.yml containing ONLY overrides (no `build:` /
+# `image:`) is NOT merged with compose.yaml. Rename this file to compose.override.yaml
+# instead of replacing docker-compose.yml fragment-style, or you will see:
+#   service "attacker" has neither an image nor a build context specified
+
+services:
+  app:
+    hostname: payment.example.com
+    environment:
+      - ATTACKER_URL=https://attacker.example.com
+      # Optional; ignored when ATTACKER_URL is set:
+      # - USE_SAME_ORIGIN_ATTACKER=1
+    extra_hosts:
+      - "payment.example.com:127.0.0.1"
+      - "attacker.example.com:127.0.0.1"
+
+  attacker:
+    hostname: attacker.example.com
+    environment:
+      - ALLOWED_ORIGINS=https://payment.example.com
+      - TRUSTED_PAYMENT_ORIGIN_SUFFIX=example.com
+    extra_hosts:
+      - "payment.example.com:127.0.0.1"
+      - "attacker.example.com:127.0.0.1"

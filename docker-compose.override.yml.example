@@ -1,6 +1,10 @@
-# Example override file - copy to docker-compose.override.yml to customize.
-# Compose automatically merges compose.yaml + docker-compose.override.yml when both exist.
-# This lets you remap ports and hostnames without editing the tracked compose.yaml file.
+# LEGACY: Only used when your primary file is docker-compose.yml (Compose merges
+# docker-compose.yml + docker-compose.override.yml).
+#
+# This repo ships compose.yaml — use compose.override.yaml instead (see
+# compose.override.yaml.example). Putting override-only YAML in docker-compose.yml alone
+# does NOT merge with compose.yaml; you get errors like "neither an image nor a build
+# context specified".
 #
 # Behind a Forti/other WAF (HTTPS to clients, plain HTTP to this stack), ensure the WAF forwards
 # X-Forwarded-Proto: https (and optionally X-Forwarded-Host). Both apps honor those headers by default.

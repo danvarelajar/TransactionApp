@@ -1,10 +1,12 @@
 # Base stack: `docker compose build` | `docker compose up`
-# (This file is `compose.yaml` so it can live in-repo; `.gitignore` skips `docker-compose.yml`
-# so you can keep a private copy if needed.)
+#
+# Local overrides (hostname, ALLOWED_ORIGINS, extra_hosts, …) go in
+# compose.override.yaml — Compose merges it automatically. See compose.override.yaml.example.
+# (.gitignore skips docker-compose.yml so you can keep an optional legacy file locally.)
 #
 # Ports are literal here so interpolation never produces ":3000" (Compose errors with
-# "invalid proto"). Override host ports only in docker-compose.override.yml with fixed
-# values, or use "${PAYMENT_PORT:-3000}:3000" and never leave PAYMENT_PORT empty in `.env`.
+# "invalid proto"). To remap host ports use compose.override.yaml with fixed values or
+# "${PAYMENT_PORT:-3000}:3000"; never leave PAYMENT_PORT empty in `.env`.
 
 services:
   app:
