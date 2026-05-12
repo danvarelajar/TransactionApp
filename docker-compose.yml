@@ -1,6 +1,6 @@
 # TransactionApp — build + env from project `.env`.
-# Copy `.env.example` to `.env`. Compose substitutes ${VARS} from `.env` for this file;
-# `env_file` passes the same file into containers (PORT is set below so it matches listen).
+# Copy `env.example` to `.env` (e.g. `cp env.example .env`).
+# Compose substitutes ${VARS} from `.env`; `env_file` passes the same file into containers.
 #
 # Prefer dynamic steal.js / script URLs: omit ATTACKER_URL unless you need a fixed fallback
 # or set FORCE_ATTACKER_URL_FROM_ENV=1.
