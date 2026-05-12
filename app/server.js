@@ -24,15 +24,19 @@ function forwardedHost(req) {
 }
 
 /**
- * ATTACKER_URL: optional full origin (legacy fixed deployment).
- * Else ATTACKER_DOMAIN: bare hostname; else derive from checkout Host:
- *   USE_SAME_ORIGIN_ATTACKER=1 -> same hostname as payment page
- *   payment.foo -> attacker.foo (dual hostname)
- *   otherwise -> same hostname (payment and attacker path-routed on one host).
+ * Prefer checkout request Host + X-Forwarded-Proto over ATTACKER_URL so script src matches
+ * the site the user actually hit. ATTACKER_URL is fallback when Host cannot be inferred.
+ * FORCE_ATTACKER_URL_FROM_ENV=1 forces ATTACKER_URL when set.
+ *
+ * ATTACKER_DOMAIN sets attacker hostname explicitly; else USE_SAME_ORIGIN_ATTACKER=1 uses
+ * payment host; else payment.* -> attacker.*; else same host as checkout.
  */
 function resolveAttackerOrigin(req) {
   const legacy = (process.env.ATTACKER_URL || '').trim();
-  if (legacy) return legacy.replace(/\/$/, '');
+  const forceEnv = (process.env.FORCE_ATTACKER_URL_FROM_ENV || '') === '1';
+  if (forceEnv && legacy) {
+    return legacy.replace(/\/$/, '');
+  }
 
   const proto = forwardedProto(req);
   const payHost = forwardedHost(req);
@@ -44,20 +48,23 @@ function resolveAttackerOrigin(req) {
   else if (payHost.startsWith('payment.')) host = `attacker.${payHost.slice('payment.'.length)}`;
   else host = payHost;
 
-  if (!host) {
-    return 'http://attacker.fortinet.demo';
+  if (host) {
+    let origin = `${proto}://${host}`;
+    const pubPort = (
+      process.env.ATTACKER_PUBLIC_PORT ||
+      process.env.EXTERNAL_ATTACKER_PORT ||
+      ''
+    ).trim();
+    if (pubPort && pubPort !== '80' && pubPort !== '443') {
+      origin += `:${pubPort}`;
+    }
+    return origin;
   }
 
-  let origin = `${proto}://${host}`;
-  const pubPort = (
-    process.env.ATTACKER_PUBLIC_PORT ||
-    process.env.EXTERNAL_ATTACKER_PORT ||
-    ''
-  ).trim();
-  if (pubPort && pubPort !== '80' && pubPort !== '443') {
-    origin += `:${pubPort}`;
+  if (legacy) {
+    return legacy.replace(/\/$/, '');
   }
-  return origin;
+  return 'http://attacker.example.com';
 }
 
 app.use(express.static(path.join(__dirname, 'public')));

