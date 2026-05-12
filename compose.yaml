@@ -1,0 +1,22 @@
+# Base stack: `docker compose build` | `docker compose up`
+# (This file is `compose.yaml` so it can live in-repo; `.gitignore` skips `docker-compose.yml`
+# so you can keep a private copy if needed.)
+#
+# Ports are literal here so interpolation never produces ":3000" (Compose errors with
+# "invalid proto"). Override host ports only in docker-compose.override.yml with fixed
+# values, or use "${PAYMENT_PORT:-3000}:3000" and never leave PAYMENT_PORT empty in `.env`.
+
+services:
+  app:
+    build: ./app
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+
+  attacker:
+    build: ./attacker
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
