@@ -1,5 +1,6 @@
 # Optional: copy to docker-compose.override.yml — Compose merges this with docker-compose.yml
-# automatically. Use it for host-specific port remaps without editing docker-compose.yml.
+# automatically. Keep only differences here (typically host port remaps); the full stack
+# lives in docker-compose.yml alone.
 #
 # WAF/off-box TLS: apps still honor X-Forwarded-Proto when the edge forwards it.
 
