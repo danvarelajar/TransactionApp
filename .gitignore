@@ -3,10 +3,11 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
-# Environment variables (contains sensitive config)
-.env
-.env.local
-.env.*.local
+# Environment variables (contains sensitive config). Ignore all `.env*` files so patterns
+# from a global gitignore cannot accidentally block only some of them—but always keep the
+# committed template tracked:
+.env*
+!.env.example
 
 # Logs
 *.log
