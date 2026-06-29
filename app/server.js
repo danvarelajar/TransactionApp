@@ -287,8 +287,24 @@ function getHtml(attackerUrl, injectScript = true) {
       font-size: 24px;
     }
     .modal-content .success-icon {
-      font-size: 64px;
-      margin-bottom: 20px;
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      background: #d4edda;
+      border: 3px solid #28a745;
+      position: relative;
+    }
+    .modal-content .success-icon::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 45%;
+      width: 12px;
+      height: 24px;
+      border: solid #28a745;
+      border-width: 0 4px 4px 0;
+      transform: translate(-50%, -50%) rotate(45deg);
     }
     .modal-content p {
       color: #666;
@@ -321,19 +337,19 @@ function getHtml(attackerUrl, injectScript = true) {
     <form id="payment-form" action="/submit" method="POST">
       <div class="form-group">
         <label for="cardNumber">Card Number</label>
-        <input type="text" name="cardNumber" id="cardNumber" placeholder="4111 1111 1111 1111" maxlength="19" pattern="[\\d\\s]{13,19}" required>
+        <input type="text" name="cardNumber" id="cardNumber" placeholder="4111 1111 1111 1111" maxlength="19" required>
       </div>
       <div class="form-group">
         <label for="expiry">Expiry Date</label>
-        <input type="text" name="expiry" id="expiry" placeholder="MM/YY" maxlength="5" pattern="\\d{2}/\\d{2}" required>
+        <input type="text" name="expiry" id="expiry" placeholder="MM/YY" maxlength="5" required>
       </div>
       <div class="form-group">
         <label for="cvv">CVV</label>
-        <input type="text" name="cvv" id="cvv" placeholder="123" maxlength="4" pattern="\\d{3,4}" required>
+        <input type="text" name="cvv" id="cvv" placeholder="123" maxlength="4" required>
       </div>
       <div class="form-group">
         <label for="cardName">Name on Card</label>
-        <input type="text" name="cardName" id="cardName" placeholder="John Doe" minlength="3" required>
+        <input type="text" name="cardName" id="cardName" placeholder="John Doe" required>
       </div>
       <button type="submit" id="submit-btn">Submit Payment</button>
     </form>
@@ -343,7 +359,7 @@ function getHtml(attackerUrl, injectScript = true) {
   <!-- Modal popup -->
   <div id="success-modal" class="modal">
     <div class="modal-content">
-      <div class="success-icon">✓</div>
+      <div class="success-icon" aria-hidden="true"></div>
       <h2>Payment Successful!</h2>
       <p>Your payment has been simulated successfully.</p>
       <button id="modal-ok-btn">OK</button>

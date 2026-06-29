@@ -1,4 +1,4 @@
-// Payment form handling - submit and modal only (validation via HTML5)
+// Payment form handling - submit and modal only (validation via HTML5 attributes)
 (function() {
   'use strict';
 
@@ -30,11 +30,6 @@
 
     form.addEventListener('submit', function(e) {
       e.preventDefault();
-
-      if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
-      }
 
       submitBtn.disabled = true;
       submitBtn.textContent = 'Processing...';

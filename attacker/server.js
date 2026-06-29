@@ -440,7 +440,7 @@ function getDashboardHtml(data) {
 </head>
 <body>
   <div class="container">
-    <h1>🔓 Attacker Dashboard</h1>
+    <h1>Attacker Dashboard</h1>
     <p class="subtitle">Exfiltrated credit card data (workshop demo)</p>
     
     <div class="stats">
@@ -458,7 +458,7 @@ function getDashboardHtml(data) {
       </div>
     </div>
     
-    <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
+    <button class="refresh-btn" onclick="location.reload()">Refresh</button>
     
     ${data.length > 0 ? `
     <table>
