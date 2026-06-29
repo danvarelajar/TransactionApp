@@ -6,7 +6,7 @@
   
   // Simple function that can be called from the page
   window.paymentUtils = {
-    version: '1.0.0',
+    version: '2.0.0',
     initialized: true,
     
     log: function(message) {
