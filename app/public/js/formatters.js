@@ -1,22 +1,22 @@
-// Input formatting functions (separate from validation)
+// Input formatting - loaded on checkout but not initialized
 (function() {
   'use strict';
-  
+
+  console.log('[formatters.js] Loaded successfully');
+
   function initFormatters() {
     var cardNumber = document.getElementById('cardNumber');
     var expiry = document.getElementById('expiry');
-    
-    // Card number formatting (adds spaces every 4 digits)
+
     if (cardNumber) {
-      cardNumber.addEventListener('input', function(e) {
+      cardNumber.addEventListener('input', function() {
         var v = this.value.replace(/\s+/g, '').replace(/(\d{4})/g, '$1 ').trim();
         this.value = v.substring(0, 19);
       });
     }
-    
-    // Expiry date formatting (adds / after MM)
+
     if (expiry) {
-      expiry.addEventListener('input', function(e) {
+      expiry.addEventListener('input', function() {
         var v = this.value.replace(/\D/g, '');
         if (v.length >= 2) {
           v = v.substring(0, 2) + '/' + v.substring(2, 4);
@@ -25,11 +25,10 @@
       });
     }
   }
-  
-  // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initFormatters);
-  } else {
-    initFormatters();
-  }
+
+  window.paymentFormatters = {
+    version: '1.0.0',
+    enabled: false,
+    init: initFormatters
+  };
 })();
